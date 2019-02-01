@@ -64,8 +64,9 @@ rectangles = ([normalize_rect(cv2.minAreaRect(x)) for x in contours])
 for rect in rectangles:
     # let's make right leaning rectangles pink and the left - yellow
     color = (255, 0, 255) if rect[2] > 0 else (0, 255, 255)
+    xrect = (rect[0], (rect[1][0]+12, rect[1][1]+12), rect[2])
     # convert each rectangle into boxes and then contours before drawing
-    display = cv2.drawContours(frame, [np.int0(cv2.boxPoints(rect))], -1, color, 3)
+    display = cv2.drawContours(frame, [np.int0(cv2.boxPoints(xrect))], -1, color, 3)
 
 # show the result in a window
 cv2.imshow('image', display)
