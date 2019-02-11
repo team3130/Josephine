@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+from __future__ import print_function
 import cv2
 import numpy as np
 import sys
@@ -21,20 +22,42 @@ def normalize_rect(rect):
         # which means swap the sizes and turn cw or ccw depending on the previous value
         new_angle = rect[2] + 90.0 if rect[2] < 0.0 else -90.0
         return (
-            rect[0],                    # same coordinates
-            (rect[1][1], rect[1][0]),   # flipped sizes
+            rect[0],  # same coordinates
+            (rect[1][1], rect[1][0]),  # flipped sizes
             new_angle
         )
     else:
         return rect
 
 
+def score_two(rect1, rect2):
+    """
+    Calculate a score for two rectangles based on their positions and orientation
+    :param rect1: Assumed "left" target
+    :param rect2: Assumed "right" target
+    :return: score
+    """
+    score = 0.0
+    vector = np.array([rect2[0][0] - rect1[0][0], rect2[0][1] - rect1[0][1]])
+    length = np.sqrt(np.dot(vector, vector))
+    if length > 0:
+        sine = vector[1] / length
+        score += sine * sine
+    return score
+
+
 if len(sys.argv) < 2:
-    print "Usage: {} image-file.png".format(sys.argv[0])
+    print("Usage: {} image-file.png".format(sys.argv[0]))
     sys.exit("No file name is given")
 
 # read the image directly from the file into the frame object
 frame = cv2.imread(sys.argv[1])
+
+frame_area = frame.shape[0] * frame.shape[1]
+min_area = frame_area / 50 / 50
+max_area = frame_area / 10 / 10
+print(max_area, min_area)
+
 # we want csv color space because it's better suited for color filtering
 hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
@@ -48,25 +71,34 @@ mask_hsv = cv2.inRange(hsv, minHSV, maxHSV)
 # find contours of the areas in the bitmap
 contours, hierarchy = cv2.findContours(mask_hsv, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-# find image moments for each contour
-moments = ([cv2.moments(x) for x in contours])
-# find Hu moments for each contour
-hu_moments = ([cv2.HuMoments(x) for x in moments])
-# dunno what to do with these moments yet, just print them out for now
-for a_moment in hu_moments:
-    print a_moment
+indexes = []
 
-# find bounding rectangles around the contours and normalize them
-# using our custom normalize_rect function to estimate their tilt
-rectangles = ([normalize_rect(cv2.minAreaRect(x)) for x in contours])
+for i in range(0, len(contours)):
+    # find image moments for each contour
+    moments = cv2.moments(contours[i])
+    area = moments['m00']
+    print("Area: {}".format(area))
+    if area < min_area or area > max_area:
+        print("Out of range.")
+        continue
+
+    # find Hu moments for each contour
+    hu_moments = cv2.HuMoments(moments)
+    # dunno what to do with these moments yet, just print them out for now
+    print(hu_moments)
+
+    # find bounding rectangles around the contours and normalize them
+    # using our custom normalize_rect function to estimate their tilt
+    rectangle = normalize_rect(cv2.minAreaRect(contours[i]))
+
+    # if all tests passed then append the rectangle to the set
+    indexes.append(i)
 
 # draw things on the original image
-for rect in rectangles:
+for i in indexes:
     # let's make right leaning rectangles pink and the left - yellow
-    color = (255, 0, 255) if rect[2] > 0 else (0, 255, 255)
-    xrect = (rect[0], (rect[1][0]+12, rect[1][1]+12), rect[2])
-    # convert each rectangle into boxes and then contours before drawing
-    display = cv2.drawContours(frame, [np.int0(cv2.boxPoints(xrect))], -1, color, 3)
+    color = (255, 0, 255)
+    display = cv2.drawContours(frame, contours[i], -1, color, 3)
 
 # show the result in a window
 cv2.imshow('image', display)
